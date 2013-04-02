@@ -16,3 +16,4 @@
 *.out
 *.app
 .DS_Store
+..gitignore.un~
