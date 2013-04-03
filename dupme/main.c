@@ -1,4 +1,6 @@
 #include <stdlib.h>
+#include <unistd.h>
+char* buffer;
 int string_to_int(char* s) {
     int ans = 0;
     while (*s != 0) {
@@ -21,9 +23,10 @@ int main(int argc, char* argv[]) {
         PRINT, IGNOR
     } current_state;
     int k = string_to_int(argv[1]);
-    char* buffer = malloc(k + 1);
+    buffer = malloc(k + 1);
     int len = 0;
     current_state = PRINT;
+
     while (1) {
         int read_res = read(0, buffer + len, k + 1 - len);
         if (read_res == 0) {
@@ -35,6 +38,30 @@ int main(int argc, char* argv[]) {
             }
             break;
         }
+        if (read_res > 0) {
+            int left = len;
+            int right = read_res + len;
+            while (left < right) {
+                if (buffer[left] == '\n') {
+                    if (current_state == PRINT) {
+                        left++;
+                        print(left);
+                        print(left);
+                    } else {
+                        current_state = PRINT;
+                    }
+                    memmove(buffer, buffer + left, right - left);
+                    right = right - left;
+                    left = 0;
+                } else {
+                    left++;
+                }
+            }
+            if (left == k + 1) {
+                current_state = IGNOR;
+            }
+        }
     }
+    free(buffer);
     return 0;
 }
