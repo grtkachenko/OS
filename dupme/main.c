@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <unistd.h>
-char* buffer;
+const int IN = 0, OUT = 1;
 int string_to_int(char* s) {
     int ans = 0;
     while (*s != 0) {
@@ -9,10 +9,10 @@ int string_to_int(char* s) {
     }
     return ans;
 }
-void print(int count) {
+void print_string_prefix(char* buffer, int count) {
     int num_ok = 0;
     while (num_ok < count) {
-        int cur = write(1, buffer + num_ok, count - num_ok);
+        int cur = write(OUT, buffer + num_ok, count - num_ok);
         if (cur > 0) {
             num_ok += cur;
         }
@@ -20,46 +20,51 @@ void print(int count) {
 }
 int main(int argc, char* argv[]) {
     enum state {
-        PRINT, IGNOR
+        PRINT, IGNORE
     } current_state;
+    char* buffer;
     int k = string_to_int(argv[1]);
     buffer = malloc(k + 1);
     int len = 0;
     current_state = PRINT;
 
     while (1) {
-        int read_res = read(0, buffer + len, k + 1 - len);
+        int read_res = read(IN, buffer + len, k + 1 - len);
+//        print(k + 1);
+//        printf(" %d", len);
         if (read_res == 0) {
-            if (len != 0 && len <= k && current_state == PRINT) {
+            if (current_state == PRINT && len > 0 && len <= k) {
                 buffer[len] = '\n';
                 len++;
-                print(len);
-                print(len);
+                print_string_prefix(buffer, len);
+                print_string_prefix(buffer, len);
             }
             break;
         }
-        if (read_res > 0) {
-            int left = len;
-            int right = read_res + len;
-            while (left < right) {
-                if (buffer[left] == '\n') {
-                    if (current_state == PRINT) {
-                        left++;
-                        print(left);
-                        print(left);
-                    } else {
-                        current_state = PRINT;
-                    }
-                    memmove(buffer, buffer + left, right - left);
-                    right = right - left;
-                    left = 0;
+        int left = len;
+        int right = read_res + len;
+        while (left < right) {
+            if (buffer[left] == '\n') {
+                if (current_state == PRINT) {
+                    left++;
+                    print_string_prefix(buffer, left);
+                    print_string_prefix(buffer, left);
                 } else {
                     left++;
+                    current_state = PRINT;
                 }
+                memmove(buffer, buffer + left, right - left);
+                right = right - left;
+                left = 0;
+            } else {
+                left++;
             }
-            if (left == k + 1) {
-                current_state = IGNOR;
-            }
+        }
+        if (left == k + 1) {
+            len = 0;
+            current_state = IGNORE;
+        } else {
+            len = left;
         }
     }
     free(buffer);
