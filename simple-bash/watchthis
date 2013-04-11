@@ -1,0 +1,15 @@
+#!/bin/bash
+TIME="$1"
+shift
+
+prev=""
+while [ true ] 
+do
+    sleep "$TIME"
+    current="$($@)"
+    echo "$current"
+    if [ -n "$prev" ]; then
+        diff -u <(echo "$current" ) <(echo "$prev")
+    fi
+    prev="$current"
+done
