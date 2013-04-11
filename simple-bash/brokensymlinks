@@ -1,0 +1,21 @@
+#!/bin/bash
+scan_for_broken_sl() {
+    file_name="$1"
+    if [ -h "$file_name" ]; then
+        if [ ! -e "$file_name" ]; then
+            echo "$1"
+            return
+        fi
+    fi
+    if [ -d "$file_name" ]; then
+        if [ "$file_name" = "/" ]; then
+            file_name=""
+        fi
+        for child in "$file_name"/*; do
+            scan_for_broken_sl "$child"    
+        done
+    fi
+}
+for file in "$@"; do
+    scan_for_broken_sl "$file"
+done
