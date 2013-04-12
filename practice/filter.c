@@ -65,8 +65,11 @@ int main(int argc, char ** argv) {
     arr[argc - optind] = 0;
     while (1) {
         int read_res = read(IN, buffer + len, num + 1 - len);
+        if (read_res < 0) {
+            return 3;
+        }
         if (read_res == 0) {
-            if (len == num) {
+            if (len <= 0 || len == num) {
                 return 2;
             }
             if (len > 0 && len < num) {

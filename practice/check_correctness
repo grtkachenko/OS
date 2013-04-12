@@ -1,0 +1,12 @@
+#!/bin/bash
+
+FROM=$(date +%s)
+NOW=$(stat -f %B "$1")
+
+(( AGE=(NOW - FROM)/60/60/24 ))
+
+if [[ ($AGE -ge 2) && ($AGE -le 5) ]]; then
+    exit 0
+fi
+
+exit 1
