@@ -13,16 +13,24 @@ void print_ans(char * buffer, int count) {
         }
     }
 }
+void println() {
+    char * println_s = malloc(1);
+    println_s[0] = '\n';
+    print_ans(println_s, 1);
+}
 void check_ans(char * buffer, int count) {
 
     if (!fork()) {
-        execl(arr, num_arr);    
+        arr[num_arr] = buffer;
+        execvp(arr[0], &arr[1]);
         exit(0);
     }
     int status = 0;
     wait(&status);
     if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+//    if (1) {
         print_ans(buffer, count);
+        println();
     }
 }
 int main(int argc, char ** argv) {
@@ -42,13 +50,15 @@ int main(int argc, char ** argv) {
         }
     }
     char * buffer = malloc(num + 1);
-    arr = & argv[optind];
-    for (int i = optind; i < argc; i++) {
+    arr = (char **) malloc(argc - optind + 1);
+    int i;
+    for (i = optind; i < argc; i++) {
         if (strcmp(argv[i], "{}") == 0) {
-            num_arr = i;
+            num_arr = i - optind;
         }
+        arr[i - optind] = argv[i];
     }
-    num_arr = argc - optind + 1;
+    arr[argc - optind] = 0;
     while (1) {
         int read_res = read(IN, buffer + len, num + 1 - len);
         if (read_res == 0) {
