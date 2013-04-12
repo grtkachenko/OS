@@ -3,6 +3,7 @@
 #include <stdlib.h>
 const int IN = 0, OUT = 1;
 char ** arr;
+char delim = '\n';
 int num_arr;
 void print_ans(char * buffer, int count) {
     int num_ok = 0;
@@ -40,14 +41,13 @@ void check_ans(char * buffer, int count) {
 int main(int argc, char ** argv) {
     int num = 4095;
     int len = 0;
-    char delim = '\n';
     int c;
     while ((c = getopt(argc, argv, "nzb:")) != -1) {
         if (c == 'n') {
             delim = '\n';
         }           
         if (c == 'z') {
-            delim = 0;
+            delim = '\0';
         }
         if (c == 'b') {
             num = atoi(optarg);
