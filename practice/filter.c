@@ -19,22 +19,26 @@ void println() {
     print_ans(println_s, 1);
 }
 void check_ans(char * buffer, int count) {
-
+    int pipefd[2];
+    pipe(pipefd);
+    
     if (!fork()) {
         arr[num_arr] = buffer;
-        execvp(arr[0], &arr[1]);
+        dup2(pipefd[1], 1);
+        execvp(arr[0], arr);
         exit(0);
     }
     int status = 0;
     wait(&status);
     if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-//    if (1) {
         print_ans(buffer, count);
-        println();
+        if (buffer[count - 1] != '\n') {
+            println();
+        }
     }
 }
 int main(int argc, char ** argv) {
-    int num;
+    int num = 4095;
     int len = 0;
     char delim = '\n';
     int c;
@@ -66,7 +70,6 @@ int main(int argc, char ** argv) {
                 return 2;
             }
             if (len > 0 && len < num) {
-                buffer[len++] = delim;
                 check_ans(buffer, len);
             }
             break;
@@ -76,9 +79,9 @@ int main(int argc, char ** argv) {
         while (left < right) {
             if (buffer[left] == delim) {
                 left++;
+                check_ans(buffer, left);
                 memmove(buffer, buffer + left, right - left);
                 right = right - left;
-                check_ans(buffer, left);
                 left = 0;
             } else {
                 left++;
