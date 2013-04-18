@@ -1,9 +1,15 @@
 #include <unistd.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <stdio.h>
-const char * PREV = "/tmp/prev";
-const char * CURRENT = "/tmp/current";
-
+const char * PREV = ".prev";
+const char * CURRENT = ".current";
+void write_to_fd(int fd, char * buffer, int size) {
+    int written = 0;
+    while (written < size) {
+        written += write(fd, buffer + written, size - written);
+    }
+}
 int main(int argc, char ** argv) {
     if (argc < 3) {
         return 1;
@@ -15,8 +21,6 @@ int main(int argc, char ** argv) {
     }
     int old_size = 0;
     char * old_buffer = malloc(buffer_size);
-    mkfifo(PREV, S_IRUSR | S_IWUSR);
-    mkfifo(CURRENT, S_IRUSR | S_IWUSR);
 
     while (1) {
         sleep(interval);
@@ -39,17 +43,23 @@ int main(int argc, char ** argv) {
                 used += read_result; 
             }
             close(fds[0]);
-            int written = 0;
-            while (written < used) {
-                written += write(1, buffer + written, used - written); 
-            }
-            close(fds[0]);
+            //write_to_fd(1, buffer, used);
             if (old_size > 0) {
-                    
+                int prev = open(PREV, O_WRONLY | O_CREAT | O_TRUNC);
+                int current = open(CURRENT, O_WRONLY | O_CREAT | O_TRUNC);        
+                write_to_fd(prev, old_buffer, old_size);
+                write_to_fd(current, buffer, used);
+                if (!fork()) {
+                    close(prev);
+                    close(current);
+                    execlp("/usr/bin/diff", "diff", "-u", PREV, CURRENT, NULL);      
+                }
+                close(prev);
+                close(current);
+                        
             }
             old_buffer = buffer;
             old_size = used;
-            
         }
     }
     return 0;
