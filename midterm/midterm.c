@@ -1,10 +1,9 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
-const char * MAIN_FILE = "main_file";
-int IN = 0, OUT = 1;
+const int MAX_SIZE = 4095;
 char ** get_command(char * buffer, int len) {
-    char ** ans = malloc(4096);
+    char ** ans = malloc(MAX_SIZE);
     int num = 0, i = 0, left = 0;
     for (i = 0; i < len; i++) {
        if (buffer[i] == ' ') {
@@ -26,7 +25,7 @@ char ** get_command(char * buffer, int len) {
 void print_string_prefix(char* buffer, int count) {
     int num_ok = 0;
     while (num_ok < count) {
-        int cur = write(OUT, buffer + num_ok, count - num_ok);
+        int cur = write(1, buffer + num_ok, count - num_ok);
         if (cur > 0) {
             num_ok += cur;
         }
@@ -35,20 +34,17 @@ void print_string_prefix(char* buffer, int count) {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 1) {
+    if (argc < 3) {
         return 1;
     }
-    int buffer_size = 4096;
-    char * buffer = malloc(buffer_size + 1);
-    int len = 0;
-    int last_size = 0;
-    char ** files = malloc(4096);
-    int num_files = 0;
-    IN = open(MAIN_FILE, O_RDONLY);
+    char * buffer = malloc(MAX_SIZE + 1);
+    int num_files = 0, len = 0, last_size = 0;
+    char ** files = malloc(MAX_SIZE);
+    int IN = open(argv[1], O_RDONLY);
     while (1) {
-        int read_res = read(IN, buffer + len, buffer_size + 1 - len);
+        int read_res = read(IN, buffer + len, MAX_SIZE + 1 - len);
         if (read_res == 0) {
-            if (len > 0 && len <= buffer_size) {
+            if (len > 0 && len <= MAX_SIZE) {
                 last_size = len;
                 char * cur = malloc(len + 1);
                 memcpy(cur, buffer, len);  
@@ -74,7 +70,7 @@ int main(int argc, char* argv[]) {
                 left++;
             }
         }
-        if (left == buffer_size + 1) {
+        if (left == MAX_SIZE + 1) {
             return 2;
         } else {
             len = left;
@@ -88,20 +84,37 @@ int main(int argc, char* argv[]) {
         //son
         close(fds[0]);
         int it; 
-        char * current = malloc(buffer_size);
+        char * current = malloc(MAX_SIZE);
         for (it = 0; it < num_files - 1; it++) {
-            int fdin = open(files[it], O_RDONLY);
-            int read_res, used = 0;
-            
-            while ((read_res = read(fdin, current + used, buffer_size - used)) != 0) {
-                used += read_res;
-            } 
-            int written = 0;
-            while (written < used) {
-                written += write(fds[1], current + written, used - written);
-            }
+            int newfds[2];
+            pipe(newfds);
+            if (!fork()) {
+                //son
+                close(newfds[0]);
 
-            close(fdin);
+                int fdin = open(files[it], O_RDONLY);
+                int read_res, used = 0;
+                while ((read_res = read(fdin, current + used, MAX_SIZE - used)) != 0) {
+                    used += read_res;
+                } 
+                int written = 0;
+                while (written < used) {
+                    written += write(newfds[1], current + written, used - written);
+                }
+                
+                close(fdin);
+                close(newfds[1]);
+                    
+            } else {
+                //parent
+                wait(NULL);
+                dup2(newfds[0], 0);
+                dup2(fds[1], 1);
+                close(newfds[0]);
+                close(newfds[1]);
+                execvp(argv[2], &argv[2]);
+                exit(0);
+            }
         }
         close(fds[1]);
     } else {
@@ -110,8 +123,7 @@ int main(int argc, char* argv[]) {
         dup2(fds[0], 0);
         close(fds[0]);
         close(fds[1]);
-        execvp(command[0], command);
-        exit(0);
+        execvp(command[0], command); 
     }
     return 0;
 }
