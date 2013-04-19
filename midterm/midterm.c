@@ -88,37 +88,14 @@ int main(int argc, char* argv[]) {
         char * current = malloc(MAX_SIZE);
         for (it = 0; it < num_files - 1; it++) {
             int newfds[2];
-            pipe(newfds);
             if (!fork()) {
-                //son
-                close(newfds[0]);
-
                 int fdin = open(files[it], O_RDONLY);
-                int read_res, used = 0;
-                while ((read_res = read(fdin, current + used, MAX_SIZE - used)) != 0) {
-                    used += read_res;
-                } 
-                if (used >= MAX_SIZE) {
-                    return 3;
-                }
-                int written = 0;
-                while (written < used) {
-                    written += write(newfds[1], current + written, used - written);
-                }
-                
-                close(fdin);
-                close(newfds[1]);
-                    
-            } else {
-                //parent
-                wait(NULL);
-                dup2(newfds[0], 0);
+                dup2(fdin, 0);
                 dup2(fds[1], 1);
-                close(newfds[0]);
-                close(newfds[1]);
                 execvp(argv[2], &argv[2]);
                 exit(0);
             }
+            wait(NULL);
         }
         close(fds[1]);
     } else {
