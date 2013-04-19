@@ -92,6 +92,8 @@ int main(int argc, char* argv[]) {
                 int fdin = open(files[it], O_RDONLY);
                 dup2(fdin, 0);
                 dup2(fds[1], 1);
+                close(fdin);
+                close(fds[1]);
                 execvp(argv[2], &argv[2]);
                 exit(0);
             }
