@@ -2,26 +2,27 @@
 #include <fcntl.h>
 #include <unistd.h>
 const int MAX_SIZE = 4095;
+// Parsing string by spaces
 char ** get_command(char * buffer, int len) {
     char ** ans = malloc(MAX_SIZE);
     int num = 0, i = 0, left = 0;
     for (i = 0; i < len; i++) {
        if (buffer[i] == ' ') {
-           int right = i - 1;
-           char * cur = malloc(right - left + 2);
-           memcpy(cur, buffer + left, right - left + 1);
+           char * cur = malloc(i - left + 1);
+           memcpy(cur, buffer + left, i - left);
            ans[num++] = cur;
-           cur[right - left + 1] = 0;
+           cur[i - left] = 0;
            left = i + 1;
         }
     }    
-    int right = i - 1;
-    char * cur = malloc(right - left + 2);
-    memcpy(cur, buffer + left, right - left + 1);
+    char * cur = malloc(i - left + 1);
+    memcpy(cur, buffer + left, i - left);
     ans[num++] = cur;
-    cur[right - left + 1] = 0;
+    cur[i - left] = 0;
     return ans;
 }
+
+// Debug function
 void print_string_prefix(char* buffer, int count) {
     int num_ok = 0;
     while (num_ok < count) {
@@ -40,9 +41,9 @@ int main(int argc, char* argv[]) {
     char * buffer = malloc(MAX_SIZE + 1);
     int num_files = 0, len = 0, last_size = 0;
     char ** files = malloc(MAX_SIZE);
-    int IN = open(argv[1], O_RDONLY);
+    int in_file = open(argv[1], O_RDONLY);
     while (1) {
-        int read_res = read(IN, buffer + len, MAX_SIZE + 1 - len);
+        int read_res = read(in_file, buffer + len, MAX_SIZE + 1 - len);
         if (read_res == 0) {
             if (len > 0 && len <= MAX_SIZE) {
                 last_size = len;
@@ -76,7 +77,7 @@ int main(int argc, char* argv[]) {
             len = left;
         }
     }
-    close(IN);
+    close(in_file);
     char ** command = get_command(buffer, last_size);
     int fds[2];
     pipe(fds);
@@ -97,6 +98,9 @@ int main(int argc, char* argv[]) {
                 while ((read_res = read(fdin, current + used, MAX_SIZE - used)) != 0) {
                     used += read_res;
                 } 
+                if (used >= MAX_SIZE) {
+                    return 3;
+                }
                 int written = 0;
                 while (written < used) {
                     written += write(newfds[1], current + written, used - written);
