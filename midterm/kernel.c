@@ -15,9 +15,11 @@ kernel() {
             if ((movedptr = isMoved(waitingForMovement.getOperationId(item))) != NULL) {
                 Allocator allocator;
                 allocator.inRam(movedptr, false);
+                int k = waitingForMovement.get(item);
                 newptr = allocator.allocate(k);
                 allocator.addFirst(newptr, k);
                 allocator.inRam(newptr, true);
+                waitingForMovement.remove(item);
                 runnable.append(item);
             }
         }
@@ -68,7 +70,7 @@ kernel() {
 
                     for (item : waitingForAllocate) {
                         int k = waitingForAllocate.get(item);
-                        if (allocator.haveInHard(k)) {
+                        if (allocator.haveInHard(k) && !waitingForMovement.contains(item)) {
                             opId = moveToHardDisk(allocator.last());
                             waitingForMovement.add(process, opId);
                         }
