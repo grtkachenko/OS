@@ -1,6 +1,7 @@
 kernel() {
 	runnable= List<Process> 
-    waitingForAllocate = List<Process>
+    waitingForAllocate = Map<Process, Integer>
+    waitingForMovement = Map<Process, Integer> 
 	waiting= MultiMap<SyscallTag, Pair<Process, Context>>
 	schedule = Map<pid, time_t>
 	while true {
@@ -10,6 +11,16 @@ kernel() {
                 runnable.add(item);    
             }    
         }	
+        for (item : waitingForMovement) {
+            if ((movedptr = isMoved(waitingForMovement.getOperationId(item))) != NULL) {
+                Allocator allocator;
+                allocator.inRam(movedptr, false);
+                newptr = allocator.allocate(k);
+                allocator.addFirst(newptr, k);
+                allocator.inRam(newptr, true);
+                runnable.append(item);
+            }
+        }
         curProc = runnable.first();
         context = curProc.exec()
         switch context.tag {
@@ -27,13 +38,10 @@ kernel() {
                     break;
                 }
                 if (allocator.haveInHard(k)) {
-                    ptr = allocator.moveLastToHard(k);
-                    allocator.inRam(ptr, false);
-                    curptr = allocator.allocate(k);
-                    allocator.inRam(curptr, true);
-                    runnable.append(new Process(..., context.cont(ptr)))
+                    opId = moveToHardDisk(allocator.last());
+                    waitingForMovement.add(process, opId);
                 } else {
-                    waitingForAllocate.add(curProc);
+                    waitingForAllocate.add(curProc, k);
                 }
                 break
 
@@ -45,9 +53,10 @@ kernel() {
                     allocator.releaseInRam(ptr);
                     allocator.removeFromMap(ptr);
                     for (item : waitingForAllocate) {
-                        if (allocator.haveInRAM(item.k)) {
-                            ptr = allocator.allocate(item.k);
-                            allocator.addFirst(ptr, item.k);
+                        int k = waitingForAllocate.get(item);
+                        if (allocator.haveInRAM(k)) {
+                            ptr = allocator.allocate(k);
+                            allocator.addFirst(ptr, k);
                             allocator.inRam(ptr, true);
                             runnable.append(item);
                         }
@@ -58,28 +67,15 @@ kernel() {
                     allocator.removeFromMap(ptr);
 
                     for (item : waitingForAllocate) {
-                        if (allocator.haveInHard(item.k)) {
-                            ptr = allocator.moveLastToHard(item.k);
-                            allocator.inRam(ptr, false);
-                            ptr = allocator.allocate(item.k);
-                            allocator.addFirst(ptr, item.k);
-                            allocator.inRam(ptr, true);
-                            runnable.append(item);
+                        int k = waitingForAllocate.get(item);
+                        if (allocator.haveInHard(k)) {
+                            opId = moveToHardDisk(allocator.last());
+                            waitingForMovement.add(process, opId);
                         }
 
                     }
                 }
                 break;
-            case moveTag:
-                k = context.argv[0]
-                p = context.argv[1]
-                Allocator allocator;
-                ptr = allocator.moveLastToHard(k);
-                allocator.inRam(ptr, false);
-                newptr = allocator.allocate(k);
-                allocator.addFirst(newptr, k);
-                allocator.inRam(newptr, true);
-                runnable.append(p);
         }
     } 
 
