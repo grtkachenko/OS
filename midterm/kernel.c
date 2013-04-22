@@ -2,33 +2,11 @@ kernel() {
 	runnable= List<Process> 
     waitingForAllocate = Map<Process, Integer>
     waitingForMovement = Map<Process, Integer> 
-	waiting= MultiMap<SyscallTag, Pair<Process, Context>>
-	schedule = Map<pid, time_t>
 	while true {
-		for (item : waiting[sleepTag]) {
-	        if (shedule[item.pid] <= currentTime) {
-                waiting.remove(item);
-                runnable.add(item);    
-            }    
-        }	
-        for (item : waitingForMovement) {
-            if ((movedptr = isMoved(waitingForMovement.getOperationId(item))) != NULL) {
-                Allocator allocator;
-                allocator.inRam(movedptr, false);
-                int k = waitingForMovement.get(item);
-                newptr = allocator.allocate(k);
-                allocator.addFirst(newptr, k);
-                allocator.inRam(newptr, true);
-                waitingForMovement.remove(item);
-                runnable.append(item);
-            }
-        }
+        Hard hard;
         curProc = runnable.first();
-        context = curProc.exec()
+        context = curProc.exec();
         switch context.tag {
-            case sleepTag:
-                waiting.put(sleepTag, new Pair(curProc, context));
-                break
             case allocTag:
                 k = context.argv[0]
                 Allocator allocator;
@@ -78,7 +56,22 @@ kernel() {
                     }
                 }
                 break;
+            case moveTag:
+                runnable.add(curProc);
+                Hard hard;
+                opid = hard.getLastOpId();
+                movedptr = hard.getPtr();
+                Allocator allocator;
+                allocator.inRam(movedptr, false);
+                Proccess item = waitingForMovement.get(opid);
+                int k = waitingForMovement.get(item);
+                newptr = allocator.allocate(k);
+                allocator.addFirst(newptr, k);
+                allocator.inRam(newptr, true);
+                waitingForMovement.remove(item);
+                runnable.append(item)
         }
+
     } 
 
 }
