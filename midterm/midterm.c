@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
 const int MAX_SIZE = 4095;
@@ -20,18 +21,6 @@ char ** get_command(char * buffer, int len) {
     ans[num++] = cur;
     cur[i - left] = 0;
     return ans;
-}
-
-// Debug function
-void print_string_prefix(char* buffer, int count) {
-    int num_ok = 0;
-    while (num_ok < count) {
-        int cur = write(1, buffer + num_ok, count - num_ok);
-        if (cur > 0) {
-            num_ok += cur;
-        }
-    }
-    printf("\n");
 }
 
 int main(int argc, char* argv[]) {
@@ -72,6 +61,8 @@ int main(int argc, char* argv[]) {
             }
         }
         if (left == MAX_SIZE + 1) {
+            free(buffer);
+            free(files);
             return 2;
         } else {
             len = left;
@@ -85,9 +76,7 @@ int main(int argc, char* argv[]) {
         //son
         close(fds[0]);
         int it; 
-        char * current = malloc(MAX_SIZE);
         for (it = 0; it < num_files - 1; it++) {
-            int newfds[2];
             if (!fork()) {
                 int fdin = open(files[it], O_RDONLY);
                 dup2(fdin, 0);
@@ -108,5 +97,7 @@ int main(int argc, char* argv[]) {
         close(fds[1]);
         execvp(command[0], command); 
     }
+    free(buffer);
+    free(files);
     return 0;
 }
