@@ -2,9 +2,11 @@
 #include <string.h>
 #include <unistd.h>
 const int IN = 0, OUT = 1;
+
 typedef enum {
     PRINT, IGNORE
 } state;
+
 void print_string_prefix(char* buffer, int count) {
     int num_ok = 0;
     while (num_ok < count) {
@@ -14,10 +16,12 @@ void print_string_prefix(char* buffer, int count) {
         }
     }
 }
+
 void print_string_twice(char* buffer, int count) {
     print_string_prefix(buffer, count);
     print_string_prefix(buffer, count);
 }
+
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         return 1;
