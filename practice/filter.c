@@ -1,10 +1,11 @@
 #include <unistd.h>
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 const int IN = 0, OUT = 1;
-char ** arr;
 char delim = '\n';
 int num_arr;
+
 void print_ans(char * buffer, int count) {
     int num_ok = 0;
     while (num_ok < count) {
@@ -14,12 +15,19 @@ void print_ans(char * buffer, int count) {
         }
     }
 }
+
 void println() {
     char * println_s = malloc(1);
     println_s[0] = '\n';
     print_ans(println_s, 1);
+    free(println_s);
 }
-void check_ans(char * buffer, int count) {
+
+int IS_OK(int status) {
+    return WIFEXITED(status) && WEXITSTATUS(status) == 0; 
+}
+
+void check_ans(char ** arr, char * buffer, int count) {
     int pipefd[2];
     pipe(pipefd);
     
@@ -31,13 +39,14 @@ void check_ans(char * buffer, int count) {
     }
     int status = 0;
     wait(&status);
-    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+    if (IS_OK(status)) {
         print_ans(buffer, count);
         if (buffer[count - 1] != '\n') {
             println();
         }
     }
 }
+
 int main(int argc, char ** argv) {
     int num = 4095;
     int len = 0;
@@ -53,8 +62,8 @@ int main(int argc, char ** argv) {
             num = atoi(optarg);
         }
     }
-    char * buffer = malloc(num + 1);
-    arr = (char **) malloc(argc - optind + 1);
+    char * buffer = (char *) malloc(num + 1);
+    char ** arr = (char **) malloc(argc - optind + 1);
     int i;
     for (i = optind; i < argc; i++) {
         if (strcmp(argv[i], "{}") == 0) {
@@ -73,7 +82,7 @@ int main(int argc, char ** argv) {
                 return 2;
             }
             if (len > 0 && len < num) {
-                check_ans(buffer, len);
+                check_ans(arr, buffer, len);
             }
             break;
         }
@@ -82,7 +91,7 @@ int main(int argc, char ** argv) {
         while (left < right) {
             if (buffer[left] == delim) {
                 left++;
-                check_ans(buffer, left);
+                check_ans(arr, buffer, left);
                 memmove(buffer, buffer + left, right - left);
                 right = right - left;
                 left = 0;
@@ -98,5 +107,7 @@ int main(int argc, char ** argv) {
 
         
     }
+    free(buffer);
+    free(arr);
     return 0;
 }
