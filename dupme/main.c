@@ -2,6 +2,9 @@
 #include <string.h>
 #include <unistd.h>
 const int IN = 0, OUT = 1;
+typedef enum {
+    PRINT, IGNORE
+} state;
 void print_string_prefix(char* buffer, int count) {
     int num_ok = 0;
     while (num_ok < count) {
@@ -19,15 +22,12 @@ int main(int argc, char* argv[]) {
     if (argc < 2) {
         return 1;
     }
-    enum state {
-        PRINT, IGNORE
-    } current_state;
     int k = atoi(argv[1]), len = 0;
     if (k < 1) {
         return 2;
     }
     char * buffer = (char *) malloc(k + 1);
-    current_state = PRINT;
+    state current_state = PRINT;
 
     while (1) {
         int read_res = read(IN, buffer + len, k + 1 - len);
