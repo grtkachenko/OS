@@ -1,14 +1,7 @@
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 const int IN = 0, OUT = 1;
-int string_to_int(char* s) {
-    int ans = 0;
-    while (*s != 0) {
-        ans = ans * 10 + (*s) - '0';
-        s++;
-    }
-    return ans;
-}
 void print_string_prefix(char* buffer, int count) {
     int num_ok = 0;
     while (num_ok < count) {
@@ -18,13 +11,22 @@ void print_string_prefix(char* buffer, int count) {
         }
     }
 }
+void print_string_twice(char* buffer, int count) {
+    print_string_prefix(buffer, count);
+    print_string_prefix(buffer, count);
+}
 int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        return 1;
+    }
     enum state {
         PRINT, IGNORE
     } current_state;
-    char* buffer;
-    int k = string_to_int(argv[1]), len = 0;
-    buffer = malloc(k + 1);
+    int k = atoi(argv[1]), len = 0;
+    if (k < 1) {
+        return 2;
+    }
+    char * buffer = (char *) malloc(k + 1);
     current_state = PRINT;
 
     while (1) {
@@ -32,8 +34,7 @@ int main(int argc, char* argv[]) {
         if (read_res == 0) {
             if (current_state == PRINT && len > 0 && len <= k) {
                 buffer[len++] = '\n';
-                print_string_prefix(buffer, len);
-                print_string_prefix(buffer, len);
+                print_string_twice(buffer, len);
             }
             break;
         }
@@ -43,8 +44,7 @@ int main(int argc, char* argv[]) {
             if (buffer[left] == '\n') {
                 left++;
                 if (current_state == PRINT) {
-                    print_string_prefix(buffer, left);
-                    print_string_prefix(buffer, left);
+                    print_string_twice(buffer, left);
                 } else {
                     current_state = PRINT;
                 }
