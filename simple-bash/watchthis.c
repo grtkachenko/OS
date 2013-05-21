@@ -1,9 +1,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdlib.h>
-#include <stdio.h>
 const char * PREV = ".prev";
 const char * CURRENT = ".current";
+
 void write_to_fd(int fd, char * buffer, int size) {
     int written = 0;
     while (written < size) {
@@ -14,14 +14,17 @@ int main(int argc, char ** argv) {
     if (argc < 3) {
         return 1;
     }
-    int buffer_size = 4096;
     int interval = atoi(argv[1]);
     if (interval <= 0) {
         return 2;
     }
-    int old_size = 0;
-    char * old_buffer = malloc(buffer_size);
 
+    int old_size = 0, buffer_size = 4096;
+    char * old_buffer = (char *) malloc(buffer_size);
+    if (old_buffer == NULL) {
+        return 3;
+    }
+    
     while (1) {
         sleep(interval);
         int fds[2];
@@ -43,7 +46,6 @@ int main(int argc, char ** argv) {
                 used += read_result; 
             }
             close(fds[0]);
-            //write_to_fd(1, buffer, used);
             if (old_size > 0) {
                 int prev = open(PREV, O_WRONLY | O_CREAT | O_TRUNC);
                 int current = open(CURRENT, O_WRONLY | O_CREAT | O_TRUNC);        

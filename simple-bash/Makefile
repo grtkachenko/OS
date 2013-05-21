@@ -1,4 +1,4 @@
 all: watchthis.c
-	gcc watchthis.c -o watchthis.o
+	gcc -o watchthis_c -Wall -Wextra -Werror -g watchthis.c
 clean:
 	rm -f main
