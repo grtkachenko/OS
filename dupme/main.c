@@ -31,6 +31,9 @@ int main(int argc, char* argv[]) {
         return 2;
     }
     char * buffer = (char *) malloc(k + 1);
+    if (buffer == NULL) {
+        return 3;
+    }
     state current_state = PRINT;
 
     while (1) {
