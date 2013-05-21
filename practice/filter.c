@@ -1,10 +1,7 @@
 #include <unistd.h>
-#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 const int IN = 0, OUT = 1;
-char delim = '\n';
-int num_arr;
 
 void print_ans(char * buffer, int count) {
     int num_ok = 0;
@@ -17,29 +14,27 @@ void print_ans(char * buffer, int count) {
 }
 
 void println() {
-    char * println_s = malloc(1);
-    println_s[0] = '\n';
-    print_ans(println_s, 1);
-    free(println_s);
+    char endl = '\n';
+    write(OUT, &endl, 1);
 }
 
-int IS_OK(int status) {
+int is_ok_status(int status) {
     return WIFEXITED(status) && WEXITSTATUS(status) == 0; 
 }
 
-void check_ans(char ** arr, char * buffer, int count) {
+void check_ans(char ** arr_argv, int num_in_arr, char * buffer, int count) {
     int pipefd[2];
     pipe(pipefd);
     
     if (!fork()) {
-        arr[num_arr] = buffer;
+        arr_argv[num_in_arr] = buffer;
         dup2(pipefd[1], 1);
-        execvp(arr[0], arr);
+        execvp(arr_argv[0], arr_argv);
         exit(0);
     }
     int status = 0;
     wait(&status);
-    if (IS_OK(status)) {
+    if (is_ok_status(status)) {
         print_ans(buffer, count);
         if (buffer[count - 1] != '\n') {
             println();
@@ -48,9 +43,8 @@ void check_ans(char ** arr, char * buffer, int count) {
 }
 
 int main(int argc, char ** argv) {
-    int num = 4095;
-    int len = 0;
-    int c;
+    int num = 4095, len = 0, c, num_arr_argv;
+    char delim = '\n';
     while ((c = getopt(argc, argv, "nzb:")) != -1) {
         if (c == 'n') {
             delim = '\n';
@@ -63,26 +57,37 @@ int main(int argc, char ** argv) {
         }
     }
     char * buffer = (char *) malloc(num + 1);
-    char ** arr = (char **) malloc(argc - optind + 1);
+    if (buffer == NULL) {
+        return 1;
+    }
+    char ** arr_argv = (char **) malloc(argc - optind + 1);
+    if (arr_argv == NULL) {
+        free(buffer);
+        return 2;
+    }
     int i;
     for (i = optind; i < argc; i++) {
         if (strcmp(argv[i], "{}") == 0) {
-            num_arr = i - optind;
+            num_arr_argv = i - optind;
         }
-        arr[i - optind] = argv[i];
+        arr_argv[i - optind] = argv[i];
     }
-    arr[argc - optind] = 0;
+    arr_argv[argc - optind] = 0;
     while (1) {
         int read_res = read(IN, buffer + len, num + 1 - len);
         if (read_res < 0) {
+            free(buffer);
+            free(arr_argv);
             return 3;
         }
         if (read_res == 0) {
             if (len <= 0 || len == num) {
-                return 2;
+                free(buffer);
+                free(arr_argv);
+                return 4;
             }
             if (len > 0 && len < num) {
-                check_ans(arr, buffer, len);
+                check_ans(arr_argv, num_arr_argv, buffer, len);
             }
             break;
         }
@@ -91,7 +96,7 @@ int main(int argc, char ** argv) {
         while (left < right) {
             if (buffer[left] == delim) {
                 left++;
-                check_ans(arr, buffer, left);
+                check_ans(arr_argv, num_arr_argv, buffer, left);
                 memmove(buffer, buffer + left, right - left);
                 right = right - left;
                 left = 0;
@@ -100,14 +105,14 @@ int main(int argc, char ** argv) {
             }
         }
         if (left == num + 1) {
-            return 1;
+            free(buffer);
+            free(arr_argv);
+            return 5;
         } else {
             len = left;
         }
-
-        
     }
     free(buffer);
-    free(arr);
+    free(arr_argv);
     return 0;
 }
