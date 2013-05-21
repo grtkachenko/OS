@@ -39,7 +39,11 @@ int main(int argc, char ** argv) {
         } else {
             //parent
             wait(NULL);
-            char * buffer = malloc(buffer_size);
+            char * buffer = (char *) malloc(buffer_size);
+            if (buffer == NULL) {
+                free(old_buffer);
+                return 4;
+            }
             close(fds[1]);
             int read_result = 0, used = 0;
             while ((read_result = read(fds[0], buffer + used, buffer_size - used)) != 0) {
@@ -54,6 +58,7 @@ int main(int argc, char ** argv) {
                 if (!fork()) {
                     close(prev);
                     close(current);
+                    free(old_buffer);
                     execlp("/usr/bin/diff", "diff", "-u", PREV, CURRENT, NULL);      
                 }
                 close(prev);
@@ -64,5 +69,6 @@ int main(int argc, char ** argv) {
             old_size = used;
         }
     }
+    free(old_buffer);
     return 0;
 }
