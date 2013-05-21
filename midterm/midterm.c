@@ -3,22 +3,45 @@
 #include <fcntl.h>
 #include <unistd.h>
 const int MAX_SIZE = 4095;
+
+void free_arr_of_arr(char ** arr, int num_files) {
+    int i;
+    for (i = 0; i < num_files; i++) {
+        free(arr[i]);
+    }
+    free(arr);
+}
+
 // Parsing string by spaces
-char ** get_command(char * buffer, int len) {
-    char ** ans = malloc(MAX_SIZE);
-    int num = 0, i = 0, left = 0;
+char ** get_command(char * buffer, int len, int * num) {
+    char ** ans = (char **) malloc(MAX_SIZE);
+    if (ans == NULL) {
+        exit(5);
+    }
+    int i = 0, left = 0;
+    (*num) = 0;
     for (i = 0; i < len; i++) {
        if (buffer[i] == ' ') {
-           char * cur = malloc(i - left + 1);
+           char * cur = (char *) malloc(i - left + 1);
+           if (cur == NULL) {
+               free(ans);
+               exit(6);
+           }
            memcpy(cur, buffer + left, i - left);
-           ans[num++] = cur;
+           (*num)++;
+           ans[*num] = cur;
            cur[i - left] = 0;
            left = i + 1;
         }
     }    
-    char * cur = malloc(i - left + 1);
+    char * cur = (char *) malloc(i - left + 1);
+    if (cur == NULL) {
+        free_arr_of_arr(ans, *num);
+        exit(7);
+    }
     memcpy(cur, buffer + left, i - left);
-    ans[num++] = cur;
+    (*num)++;
+    ans[*num] = cur;
     cur[i - left] = 0;
     return ans;
 }
@@ -27,16 +50,28 @@ int main(int argc, char* argv[]) {
     if (argc < 3) {
         return 1;
     }
-    char * buffer = malloc(MAX_SIZE + 1);
+    char * buffer = (char *) malloc(MAX_SIZE + 1);
+    if (buffer == NULL) {
+        return 2;
+    }
+    char ** files = (char **) malloc(MAX_SIZE);
+    if (files == NULL) {
+        free(buffer);
+        return 3;
+    }
     int num_files = 0, len = 0, last_size = 0;
-    char ** files = malloc(MAX_SIZE);
     int in_file = open(argv[1], O_RDONLY);
     while (1) {
         int read_res = read(in_file, buffer + len, MAX_SIZE + 1 - len);
         if (read_res == 0) {
             if (len > 0 && len <= MAX_SIZE) {
                 last_size = len;
-                char * cur = malloc(len + 1);
+                char * cur = (char *) malloc(len + 1);
+                if (cur == NULL) {
+                    free(buffer);
+                    free_arr_of_arr(files, num_files);
+                    return 8;
+                }
                 memcpy(cur, buffer, len);  
                 cur[len] = 0;
                 files[num_files++] = cur;
@@ -48,7 +83,12 @@ int main(int argc, char* argv[]) {
         while (left < right) {
             if (buffer[left] == '\n') {
                 last_size = left;
-                char * cur = malloc(left + 1);
+                char * cur = (char *) malloc(left + 1);
+                if (cur == NULL) {
+                    free(buffer);
+                    free_arr_of_arr(files, num_files);
+                    return 8;
+                }
                 memcpy(cur, buffer, left);  
                 files[num_files++] = cur;
                 cur[left] = 0;
@@ -62,14 +102,15 @@ int main(int argc, char* argv[]) {
         }
         if (left == MAX_SIZE + 1) {
             free(buffer);
-            free(files);
-            return 2;
+            free_arr_of_arr(files, num_files);
+            return 4;
         } else {
             len = left;
         }
     }
     close(in_file);
-    char ** command = get_command(buffer, last_size);
+    int num_of_commands;
+    char ** command = get_command(buffer, last_size, &num_of_commands);
     int fds[2];
     pipe(fds);
     if (!fork()) {
@@ -98,6 +139,7 @@ int main(int argc, char* argv[]) {
         execvp(command[0], command); 
     }
     free(buffer);
-    free(files);
+    free_arr_of_arr(files, num_files);
+    free_arr_of_arr(command, num_of_commands);
     return 0;
 }
