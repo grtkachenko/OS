@@ -10,66 +10,40 @@
 #include <util.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 const int MAX_SIZE = 4096;
 int pid;
 void handler() {
     if (pid)
-        kill(-pid, SIGINT);
+        kill(pid, SIGINT);
 }
 
-int read_to(int fd, char * buf, int * len) {
-    int size = read(fd, buf + (*len), MAX_SIZE); 
-    if (size == -1 || size == 0) {
-        return 1;
+void write_to_fd(int fd, char * buffer, int len) {
+    int num_ok = 0;
+    while (num_ok < len) {
+        num_ok += write(fd, buffer + num_ok, len - num_ok);
     }
-    (*len) += size;
-    return 0;
 }
 
-int write_to(int fd, char * buf, int * len) {
-    int size = write(fd, buf, (*len)); 
-    if (size == -1) {
-        return -1;
-    }
-    memmove(buf, buf + size, (*len) - size);
-    (*len) -= size;
-    return 0;
+void print_error_to_fd(int fd) {
+    char * msg = strerror(errno);
+    write_to_fd(fd, "err: ", 5);
+    write_to_fd(fd, msg, strlen(msg));
 }
 
-
-short get_event(int len) {
-    short event = POLLERR | POLLHUP;
-    if (len != 0) {
-        event |= POLLOUT;
-    }
-    if (len != MAX_SIZE) {
-        event |= POLLIN;
-    }
-    return event;
+void print_ok_to_fd(int fd) {
+    write_to_fd(fd, "ok\0", 3);
 }
 
-// 0 - ok
-// 1 - read
-// 2 - err
-// 3 - shutdown
-//
-int propogate(struct pollfd fds, int fd, char * buf1, char * buf2, int * len1, int * len2) {
-    if ((fds.revents & (POLLERR | POLLHUP)) == 0) {
-        int res;
-        if ((fds.revents & POLLIN) != 0) {
-            res = read_to(fd, buf1, len1);
-        }
-        if ((fds.revents & POLLOUT) != 0) {
-            if (write_to(fd, buf2, len2) == -1) {
-                return 3;
-            }
-        }
-        return res;
-    } else {
-        return 2;
-    }
-
+void print_int_to_fd(int fd, int val) {
+    char val_str[10];
+    sprintf(val_str, "%d", val);
+    write_to_fd(fd, val_str, strlen(val_str));
+    write_to_fd(fd, "\0", 1);
 }
+
 int main() {
     if ((pid = fork())) {
         signal(SIGINT, &handler); 
@@ -120,101 +94,51 @@ int main() {
                 perror("accept fail");
                 return 6;
             }
-
-            if (fork()) {
-                close(new_sd);
-            } else {
+            
+            if (!fork()) {
                 close(sd);
-                int master, slave;
-                char buffer[4096];
-
-                if (openpty(&master, &slave, buffer, NULL, NULL) != 0) {
-                    close(new_sd);
-                    return 7;
-                }
-                if (fork()) {
-                    close(slave);
-                    fcntl(master, F_SETFL, fcntl(master, F_GETFL) | O_NONBLOCK);
-                    fcntl(new_sd, F_SETFL, fcntl(new_sd, F_GETFL) | O_NONBLOCK); 
-                    struct pollfd fds[] = {
-                        {
-                            master, POLLIN | POLLOUT | POLLERR | POLLHUP, 0
-                        }, 
-                        {
-                            new_sd, POLLIN | POLLOUT | POLLERR | POLLHUP, 0
-                        }
-                    };
-                    char bufmaster[MAX_SIZE], bufnew_sd[MAX_SIZE];
-                    int bufmaster_len = 0, bufnew_sd_len = 0;
-                    int dead[] = {
-                        0, 0
-                    };
-                    while (1) {
-                        if((dead[0] > 0 && (bufnew_sd_len == 0 || dead[1] == 2)) || 
-                            (dead[1] > 0 && (bufmaster_len == 0 || dead[0] == 2))) {
-                            close(master);
-                            close(new_sd);
-                            return 7;
-                        }
-                        fds[0].events = get_event(bufmaster_len);
-                        fds[1].events = get_event(bufnew_sd_len);
-                        int num = poll(fds, 2, -1);
-                        if (num == -1) {
-                            if (errno == EINTR) {
-                                continue;
-                            } else {
-                                close(master);
-                                close(new_sd);
-                                return 8;
-                            }
-                        }
-                        if ((fds[0].revents & (POLLERR | POLLHUP)) == 0) {
-                            if ((fds[0].revents & POLLIN) != 0) {
-                                dead[0] = read_to(master, bufnew_sd, &bufnew_sd_len);
-                            }
-                            if ((fds[0].revents & POLLOUT) != 0) {
-                                if (write_to(master, bufmaster, &bufmaster_len) == -1) {
-                                    close(master);
-                                    close(new_sd);
-                                    return 9;
-                                }
-                            }
-                        } else {
-                            dead[0] = 2;
-                        }
-
-                        if ((fds[1].revents & (POLLERR | POLLHUP)) == 0) {
-                            if ((fds[1].revents & POLLIN) != 0) {
-                                dead[1] = read_to(new_sd, bufmaster, &bufmaster_len);
-                            }
-                            if ((fds[1].revents & POLLOUT) != 0) {
-                                if (write_to(new_sd, bufnew_sd, &bufnew_sd_len) == -1) {
-                                    close(master);
-                                    close(new_sd);
-                                    return 10;
-                                }
-                            }
-                        } else {
-                            dead[1] = 2;
+                char * file_name = (char *) malloc(MAX_SIZE);
+                int len = 0;
+                while (1) {
+                    int i, was_zero = 0, sz = read(new_sd, file_name + len, MAX_SIZE  - len);
+                    len += sz;
+                    for (i = 0; i < len; i++) {
+                        if (file_name[i] == '\0') {
+                            was_zero = 1;
+                            break;
                         }
                     }
-
-                } else {
-                    close(master);
-                    dup2(slave, 0);
-                    dup2(slave, 1);
-                    dup2(slave, 2);
-                    setsid();
-                    close(new_sd);
-                    int ff = open(buffer, O_RDWR);
-                    if(ff)
-                        close(ff);
-                    execl("/bin/bash", "/bin/bash", NULL);
-                    return 0;
+                    if (sz <= 0 || was_zero) {
+                        break;
+                    }
                 }
+                int fd = open(file_name, O_RDONLY);
+                if (fd == -1) {
+                    print_error_to_fd(new_sd);
+                    free(file_name);
+                    close(new_sd);
+                    return 0;
+                } else {
+                    print_ok_to_fd(new_sd);
+                    struct stat buf;
+                    fstat(fd, &buf);
+                    print_int_to_fd(new_sd, buf.st_size);
+                    char * buffer = (char *) malloc(MAX_SIZE);
+                    while (1) {
+                        int sz = read(fd, buffer, MAX_SIZE);
+                        if (sz <= 0) {
+                            break;
+                        }
+                        write_to_fd(new_sd, buffer, sz);
+                    }
+                    write_to_fd(new_sd, "\0", 1);
+                    free(buffer);
+                }
+                free(file_name);
+                close(new_sd);
                 return 0;
             }
-            return 0;
+            close(new_sd);
         }
         
         close(sd);
