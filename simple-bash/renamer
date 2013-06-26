@@ -3,9 +3,11 @@ for file_masks in "$@"
 do
     if [ -f "$file_masks" ]
     then
-        read -e -p "Enter new file name:" -i "$file_masks" new_name
-        mv "$file_masks" "$new_name"
+        echo "$file_masks"
+        read -p "Type new file name: " new_name
+        if [[ (-n "$new_name") && !(-e "$new_name") ]]
+        then
+            mv "$file_masks" "$new_name"
+        fi
     fi
 done
-
-exit 0
