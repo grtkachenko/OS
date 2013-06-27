@@ -20,27 +20,7 @@
 #include <iostream>
 using namespace std;
 const int MAX_SIZE = 4096, MAX_CLIENTS = 100;
-const string COLLISION = "\0";
-
-
-string parse_it(char * buffer, int len) {
-    bool is_ok = false;
-    string ev;
-    for (int j = 0; j < len; j++) {
-        if (buffer[j] == ' ') {
-            is_ok = true;
-            continue;
-        } 
-        if (buffer[j] == '\n') {
-            is_ok = false;
-        }
-        if (is_ok) {
-            ev += buffer[j];
-        }
-    }
-    return ev;
-}
-
+const string COLLISION = "Collision";
 struct my_buffer {
     char * buffer;
     int len;
@@ -95,7 +75,10 @@ string get_next(char * buffer, int size, char delim, int number) {
             ans += buffer[i];
         }
     }
-    return ans + '\0';
+    if (ans.back() != '\0') {
+        ans += '\0';
+    }
+    return ans;
 }
 
 
@@ -158,8 +141,7 @@ int main(int argc, char ** argv) {
         }
         int fd = connect(sd, res->ai_addr, res->ai_addrlen);
         if (fd != -1) {
-            printf("Connected!\n");
-            clients[num_clients].fd = fd;
+            clients[num_clients].fd = sd;
             clients[num_clients].events = POLLIN;
             num_clients++;
         }
@@ -170,20 +152,12 @@ int main(int argc, char ** argv) {
     int cmd_len = 0;
     while (1) {
         poll(clients, num_clients, -1);
-        if (clients[0].revents & POLLIN) {
-            socklen_t  addr_size = sizeof(sock_stor);
-            clients[num_clients].fd = accept(sd, (struct sockaddr *) &sock_stor, &addr_size);
-            clients[num_clients].events = POLLIN;
-            num_clients++;
-            printf("New client connected\n");
-        }
         
         for (int i = 2; i < num_clients; i++) {
             if (clients[i].revents & POLLOUT) {
                 int cnt = write(clients[i].fd, out_to_client[i].buffer, out_to_client[i].len);
                 memmove(out_to_client[i].buffer, out_to_client[i].buffer + cnt, out_to_client[i].len - cnt);
                 out_to_client[i].len -= cnt;
-                cout << out_to_client[i].buffer << endl;
                 if (out_to_client[i].len == 0) {
                     clients[i].events = POLLIN;
                 }
@@ -191,46 +165,85 @@ int main(int argc, char ** argv) {
             if (clients[i].revents & POLLIN) {
                 char buffer[50];
                 int cnt = read(clients[i].fd, buffer, 50);
+                int cmd_len = cnt;
                 if (cnt != 0) {
                     int status = parse(buffer, cnt);
                     if (status != -1) {
-                        key = get_next(buffer, cnt, ' ', 1);
+                        key = get_next(buffer, cmd_len, ' ', 1);
                         if (status == 0) {
-                            value1 = get_next(buffer, cnt, ' ', 2);
-                            value2 = get_next(buffer, cnt, ' ', 3);
-                            if (history[key].empty()) {
+                            value1 = get_next(buffer, cmd_len, ' ', 2);
+                            value2 = get_next(buffer, cmd_len, ' ', 3);
+                            if (history[key].empty() || history[key].back().empty()) {
                                 history[key].push_back(value2);
                                 for (int j = 2; j < num_clients; j++) {
                                     clients[j].events |= POLLOUT;
-                                    for (int kk = 0; kk < cnt; kk++) {
-                                        out_to_client[j].buffer[out_to_client[j].size++] = buffer[kk];
-                                    }
+                                    out_to_client[j].add(buffer);
                                 }
                             } else {
-                                for (int i = 0; i < (int) history[key].size(); i++) {
-                                    if (history[key][i] == value1) {
-                                        if (i + 1 != (int) history[key].size()) {
-                                            if (history[key][i + 1] != value2) {
+                                if ((int) history[key].size() != 1 || history[key].back() != value2) {
+                                    bool have_collision = true;
+                                    bool have_element = false;
+                                    for (int i = 0; i < (int) history[key].size(); i++) {
+                                        if (history[key][i] == value1) {
+                                            have_element = true;
+                                            if (i + 1 != (int) history[key].size()) {
+                                                if (history[key][i + 1] != value2) {
+                                                    have_collision = true;
+                                                } else {
+                                                    have_collision = false;
+                                                }
+                                            } else {
+                                                history[key].push_back(value2);
                                                 for (int j = 2; j < num_clients; j++) {
                                                     clients[j].events |= POLLOUT;
-                                                    out_to_client[j].add("collision ");
-                                                    out_to_client[j].add(key);
+                                                    out_to_client[j].add(buffer);
                                                 }
+                                                have_collision = false;
                                             }
-                                        } else {
-                                            history[key].push_back(value2);
-                                            for (int j = 2; j < num_clients; j++) {
-                                                clients[j].events |= POLLOUT;
-                                                out_to_client[j].add(buffer);
+                                            break;
+                                        } 
+                                        if (history[key][i] == value2) {
+                                            if (i > 0 && history[key][i - 1] == "") {
+                                                have_collision = false;
+                                                break;
                                             }
                                         }
-                                        break;
-                                    } 
+                                    }
+                                    have_collision &= !have_element;
+                                    if (have_collision) {
+                                        history[key].push_back("");
+                                        for (int i = 2; i < num_clients; i++) {
+                                            clients[i].events |= POLLOUT;
+                                            out_to_client[i].add("collision ");
+                                            out_to_client[i].add(key);
+                                            out_to_client[i].add("\n");
+                                        }
+                                    }
                                 }
                             }
                         }
+                        if (status == 1) {
+                            if (history[key].empty()) {
+                                // for debug
+                                cout << "empty history" << endl;
+                            } else
+                            if (!history[key].back().empty()) {
+                                history[key].push_back("");
+                                for (int i = 2; i < num_clients; i++) {
+                                    clients[i].events |= POLLOUT;
+                                    out_to_client[i].add("collision ");
+                                    out_to_client[i].add(key);
+                                    out_to_client[i].add("\n");
+                                }
+                            }
+
+                        }
                         if (status == 2) {
                             for (string st : history[key]) {
+                                if (st.empty()) {
+                                    cout << COLLISION << endl;
+                                    continue;
+                                }
                                 cout << st << endl;
                             }
                         }
@@ -250,22 +263,24 @@ int main(int argc, char ** argv) {
                 if (status == 0) {
                     value1 = get_next(command, cmd_len, ' ', 2);
                     value2 = get_next(command, cmd_len, ' ', 3);
-                    if (history[key].empty()) {
+                    if (history[key].empty() || history[key].back().empty()) {
                         history[key].push_back(value2);
                         for (int j = 2; j < num_clients; j++) {
                             clients[j].events |= POLLOUT;
                             out_to_client[j].add(command);
                         }
                     } else {
+                        bool have_collision = true;
+                        bool have_element = false;
+                        
                         for (int i = 0; i < (int) history[key].size(); i++) {
                             if (history[key][i] == value1) {
+                                have_element = true;
                                 if (i + 1 != (int) history[key].size()) {
                                     if (history[key][i + 1] != value2) {
-                                        for (int j = 2; j < num_clients; j++) {
-                                            clients[j].events |= POLLOUT;
-                                            out_to_client[j].add("collision ");
-                                            out_to_client[j].add(key);
-                                        }
+                                        have_collision = true;
+                                    } else {
+                                        have_collision = false;
                                     }
                                 } else {
                                     history[key].push_back(value2);
@@ -273,26 +288,48 @@ int main(int argc, char ** argv) {
                                         clients[j].events |= POLLOUT;
                                         out_to_client[j].add(command);
                                     }
+                                    have_collision = false;
                                 }
                                 break;
                             } 
+                            if (history[key][i] == value2) {
+                                if (i > 0 && history[key][i - 1] == "") {
+                                    have_collision = false;
+                                    break;
+                                }
+                            }
+                        }
+                        have_collision &= !have_element;
+                        if (have_collision) {
+                            history[key].push_back("");
+                            for (int j = 2; j < num_clients; j++) {
+                                clients[j].events |= POLLOUT;
+                                out_to_client[j].add("collision ");
+                                out_to_client[j].add(key);
+                                out_to_client[j].add("\n");
+                            }
                         }
                     }
                 }
                 if (status == 2) {
                     for (string st : history[key]) {
+                        if (st.empty()) {
+                            cout << COLLISION << endl;
+                            continue;
+                        }
                         cout << st << endl;
-                    }
-                    for (int j = 2; j < num_clients; j++) {
-                        clients[j].events |= POLLOUT;
-                        out_to_client[j].add(command);
                     }
                 }
                 cmd_len = 0;
                 key = value1 = value2 = "";
             } 
         }
-        
+        if (clients[0].revents & POLLIN) {
+            socklen_t  addr_size = sizeof(sock_stor);
+            clients[num_clients].fd = accept(sd, (struct sockaddr *) &sock_stor, &addr_size);
+            clients[num_clients].events = POLLIN;
+            num_clients++;
+        }
         
     }
     
